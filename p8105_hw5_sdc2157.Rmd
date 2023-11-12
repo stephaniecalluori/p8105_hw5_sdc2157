@@ -260,7 +260,6 @@ participant_clean |>
   geom_smooth(se = FALSE) +
   facet_grid(~arm)
   
-  
 
 ```
 
