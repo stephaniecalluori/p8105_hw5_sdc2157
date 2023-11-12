@@ -13,8 +13,8 @@ library(httr)
 set.seed(1)
 ```
 
-setup
-```{r, message = FALSE}
+
+```{r, message = FALSE, echo = FALSE, results = FALSE}
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.asp = .6,
@@ -31,6 +31,8 @@ options(
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
+
+# Problem 1
 
 #Describe the Raw data:
 ```{r}
@@ -57,7 +59,12 @@ victim_age is of class character so we made it a numeric
 homicide_clean <- homicide_raw |> 
   janitor::clean_names() |> 
   mutate(victim_age = as.numeric(victim_age)) |> 
-  mutate(city_state = paste(city, state, sep = ","))
+  mutate(city_state = paste(city, state, sep = ",")) |> 
+  mutate(disposition = recode(
+    disposition,
+    "Closed by arrest" = 0,
+    "Closed without arrest" = 1,
+    "Open/No arrest" = 1))
 
 head(homicide_clean)
 
@@ -90,7 +97,7 @@ number of unsolved homicides (those for which the disposition is “Closed witho
 Number of unresolved homicides in each city
 ```{r}
 homicide_clean |> 
-  filter(disposition == "Closed without arrest" | disposition == "Open/No arrest") |> 
+  filter(disposition == 1) |> 
   count(city_state) |> 
   mutate(city_state = forcats::fct_reorder(city_state, n, .desc = TRUE)) |> 
   ggplot(aes(x = city_state, y = n)) + 
@@ -113,12 +120,7 @@ Conducting a one sample test for proportions using prop.test
 Is the proportion of unresolved cases in Baltimore different from 50%?
 ```{r}
 baltimore_df <- homicide_clean |> 
-  filter(city_state == "Baltimore,MD") |> 
-  mutate(disposition = recode(
-    disposition,
-    "Closed by arrest" = 0,
-    "Closed without arrest" = 1,
-    "Open/No arrest" = 1))
+  filter(city == "Baltimore")
 
 num_successes <- baltimore_df |> 
   filter(disposition == 1) |> 
@@ -142,11 +144,73 @@ output |>
  # knitr::kable(digits = 3)
 
 
+```
+
+
+Turn Baltimore example into a function to get estimate and CI for each city; then test the function
+
+```{r}
+estimate_and_CI <- function(city_df) {
+  
+successes <- city_df |> 
+  filter(disposition == 1) |> 
+  nrow()
+
+sample_size <- nrow(city_df)
+
+output <- prop.test(x = successes, n = sample_size, p = 0.5, alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+
+output |> 
+  broom::tidy() |> 
+  select(estimate, conf.low, conf.high)
+  
+}
+
+estimate_and_CI(baltimore_df )
 
 ```
 
 
+Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+```{r}
+homicide_nest_df <- homicide_clean |> 
+  select(city, everything()) |> 
+  nest(.data = _, data = uid:city_state)
 
+results <- homicide_nest_df |> 
+  mutate(summary = map(data, estimate_and_CI)) |> 
+  unnest(cols = summary) |> 
+  select(city, estimate, conf.low, conf.high)
+
+head(results)
+
+#map(homicide_nest_df$data, estimate_and_CI)
+
+```
+
+Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+
+```{r}
+results |> 
+  mutate(city = forcats::fct_reorder(city, estimate, .desc = TRUE)) |> 
+  ggplot(aes(x = city, y = estimate)) +
+  geom_point() +
+  geom_errorbar(
+    aes(x = city,
+        ymin = conf.low,
+        ymax = conf.high)
+  ) +
+  labs(
+    title = "Estimate of the proportion of unresolved homicides in each city",
+    x = "city",
+    y = "estimate of proportion of unresolved homicides"
+  ) +
+  theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1))
+
+
+```
+
+# Problem 2
 
 
 
