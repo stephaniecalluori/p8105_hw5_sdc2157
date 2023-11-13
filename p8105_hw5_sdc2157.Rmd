@@ -286,7 +286,7 @@ simul_df <-
 simul_df <- simul_df |> 
   mutate(summary = map(simul_dataset, \(si) t_test(x = si))) |> 
   unnest(summary) |> 
-  select(sample_size, true_mean_u, iter, estimate, p.value)
+  select(true_mean_u, estimate, p.value)
 
 ```
 Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ
@@ -294,6 +294,7 @@ Make a plot showing the proportion of times the null was rejected (the power of 
 
 ```{r}
 simul_df |> 
+  select(true_mean_u, estimate, p.value) |> 
   mutate(null_rejected = case_when(
     p.value <= 0.05 ~ "Yes",
     p.value > 0.05 ~ "No")) |>
@@ -326,6 +327,7 @@ Make a plot showing the average estimate of μ̂
 ```{r}
 
 all <- simul_df |> 
+  select(true_mean_u, estimate) |> 
   group_by(true_mean_u) |> 
   summarize(avg_estimate_u = mean(estimate)) |> 
   ggplot(aes(true_mean_u, avg_estimate_u)) +
@@ -338,6 +340,7 @@ all <- simul_df |>
   )
 
 filtered <- simul_df |> 
+  select(true_mean_u, estimate, p.value) |> 
   filter(p.value <= 0.05) |> 
   group_by(true_mean_u) |> 
   summarize(avg_estimate_u = mean(estimate)) |> 
