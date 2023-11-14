@@ -387,21 +387,8 @@ but when we reject the null we say it follows a diff distribution so they should
 
 # So look at the rejected null we would expect the graphs not to overla right b/c we're rejecting the nully; which we mainly what we see (that's not the case for 4-6 not sure why)
 
-how to overlay two functions in R?
 
-df1 <- data.frame(x = seq(2, 8, by = 2),
-                  y = seq(30, 15, by = -5))
-df2 <- data.frame(x = seq(2, 8, by = 2),
-                  y = seq(12, 24, by = 4))
-
-ggplot(df1, aes(x, log(y))) + 
-   geom_line() +
-   geom_line(data = df2, color = "red") 
    
-```{r}
-ggplot(all, aes())
 
-```
-   
 
 
