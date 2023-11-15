@@ -4,8 +4,9 @@ author: "Stephanie Calluori"
 date: 2023-11-15
 output: github_document
 ---
-load packages and set seed
-```{r, message = FALSE}
+
+# Load packages and set seed
+```{r packages, message = FALSE}
 library(tidyverse)
 library(readr)
 library(rvest)
@@ -15,8 +16,7 @@ library(patchwork)
 set.seed(1)
 ```
 
-
-```{r, message = FALSE, echo = FALSE, results = FALSE}
+```{r setup, message = FALSE, echo = FALSE, results = FALSE}
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.asp = .6,
@@ -36,131 +36,103 @@ scale_fill_discrete = scale_fill_viridis_d
 
 # Problem 1
 
-#Describe the Raw data:
-```{r}
-homicide_raw <- read_csv("data/homicide_data_copy.csv", col_names = TRUE)
+## Import, Clean, and Describe the Data
 
-#str(homicide_raw)
-nrow(homicide_raw)
-ncol(homicide_raw)
-colnames(homicide_raw)
+```{r case data, message = FALSE}
+homicide_raw <- read_csv("data/homicide_data_copy.csv", col_names = TRUE, na = c("", "NA", "Unknown"))
 
-homicide_raw |> 
-  count(uid) |> 
-  arrange(desc(n))
-
-```
-
-ADD DESCRIPTION for raw data; rows, columns, variables; each row is a case; no double entries of cases
-
-
-#Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
-
-victim_age is of class character so we made it a numeric
-```{r}
 homicide_clean <- homicide_raw |> 
   janitor::clean_names() |> 
   mutate(victim_age = as.numeric(victim_age)) |> 
   mutate(city_state = paste(city, state, sep = ",")) |> 
   mutate(disposition = recode(
     disposition,
-    "Closed by arrest" = 0,
-    "Closed without arrest" = 1,
-    "Open/No arrest" = 1))
+    "Closed by arrest" = "solved",
+    "Closed without arrest" = "unsolved",
+    "Open/No arrest" = "unsolved")) |> 
+  filter(city_state != "Tulsa,AL") 
 
-head(homicide_clean)
-
-class(homicide_clean$victim_age)
-
-homicide_clean |> 
-  count(city_state) |> 
-  nrow()
+prop_status <- homicide_clean |> 
+  count(disposition) |> 
+  mutate(prop = n / sum(n)*100)
 
 ```
 
-Total number of homicides in each city
-```{r}
+The Washington Post gathered data on homicides in 50 large US cities to examine the number and characteristics of homicides that go solved vs unsolved. The dataset has `r nrow(homicide_clean)` rows and `r ncol(homicide_clean)` columns. Each row in the dataset is a case.
+
+Variables include city and state name, details about the victim (race, age, sex), and case status. 
+
+Of the `r nrow(homicide_clean)` cases, about `r round(prop_status[1,3])` percent are solved and `r round(prop_status[2,3])` percent are unsolved. Victim age was of class character, so it was converted to numeric.
+
+## Total number of homicides across cities 
+
+```{r total cases}
 homicide_clean |> 
   count(city_state) |> 
   mutate(city_state = forcats::fct_reorder(city_state, n, .desc = TRUE)) |> 
   ggplot(aes(x = city_state, y = n)) + 
   geom_col() +
   labs(
-    title = "Number of homicides in each city",
+    title = "Total number of homicides in each city",
     x = "city",
     y = "Total # of homicides"
   ) +
   theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1))
 
 ```
+Chicago has the highest total number of homicides. Following Chicago, Philadelphia, Houston, and Baltimore have the highest number of homicides.
 
+## Analysis of unsolved homicides across cities
 
-number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
-Number of unresolved homicides in each city
-```{r}
+```{r total unsolved}
 homicide_clean |> 
-  filter(disposition == 1) |> 
+  filter(disposition == "unsolved") |> 
   count(city_state) |> 
   mutate(city_state = forcats::fct_reorder(city_state, n, .desc = TRUE)) |> 
   ggplot(aes(x = city_state, y = n)) + 
   geom_col() +
   labs(
-    title = "Number of unresolved homicides in each city",
+    title = "Number of unsolved homicides in each city",
     x = "city",
-    y = "# of unresolved homicides"
+    y = "# of unsolved homicides"
   ) +
   theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1))
 
 ```
+Chicago has the highest number of unsolved homicides. Following Chicago, Baltimore, Houston, and Detroit have the highest number of unsolved homicides.
 
-DESCRIBE Each Graph
 
-If n> 30: prop.test(x, n, p = 0.5, alternative = “two.sided”, correct=TRUE)
-For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved; save the output of prop.test as an R object, apply the broom::tidy to this object and pull the estimated proportion and confidence intervals from the resulting tidy dataframe.
-
-Conducting a one sample test for proportions using prop.test
-Is the proportion of unresolved cases in Baltimore different from 50%?
-```{r}
+```{r baltimore}
 baltimore_df <- homicide_clean |> 
   filter(city == "Baltimore")
 
-num_successes <- baltimore_df |> 
-  filter(disposition == 1) |> 
+num_x <- baltimore_df |> 
+  filter(disposition == "unsolved") |> 
   nrow()
 
 n_sample <- nrow(baltimore_df)
 
-output <- prop.test(x = num_successes, n = n_sample, p = 0.5, alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+output <- prop.test(x = num_x, n = n_sample)
 
 output |> 
   broom::tidy() |> 
   select(estimate, conf.low, conf.high)
 
-#prop.test(x = num successes, n = total cases, p = 0.5, alternative = "two.sided", conf.level = 0.95, correct = FALSE)
-
-
-#fit |> 
- # broom::tidy() |> 
-  #select(term, estimate, p.value) |> 
- # mutate(term = str_replace(term, "^borough", "Borough: ")) |> 
- # knitr::kable(digits = 3)
-
-
 ```
+In Baltimore, about 64.6% of homicides are unsolved. 95% Confidence interval: (62.8, 66.3)
 
+Below, I created a function to extract the estimate and confidence interval for the proportion of unsolved homicides in each city.
 
-Turn Baltimore example into a function to get estimate and CI for each city; then test the function
-
-```{r}
+```{r estimate CI function}
 estimate_and_CI <- function(city_df) {
   
-successes <- city_df |> 
-  filter(disposition == 1) |> 
+uns <- city_df |> 
+  filter(disposition == "unsolved") |> 
   nrow()
 
 sample_size <- nrow(city_df)
 
-output <- prop.test(x = successes, n = sample_size, p = 0.5, alternative = "two.sided", conf.level = 0.95, correct = FALSE)
+output <- prop.test(x = uns, n = sample_size)
 
 output |> 
   broom::tidy() |> 
@@ -168,13 +140,9 @@ output |>
   
 }
 
-estimate_and_CI(baltimore_df )
-
 ```
 
-
-Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
-```{r}
+```{r unsolved dataset}
 homicide_nest_df <- homicide_clean |> 
   select(city, everything()) |> 
   nest(.data = _, data = uid:city_state)
@@ -184,15 +152,10 @@ results <- homicide_nest_df |>
   unnest(cols = summary) |> 
   select(city, estimate, conf.low, conf.high)
 
-head(results)
-
-#map(homicide_nest_df$data, estimate_and_CI)
 
 ```
 
-Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
-
-```{r}
+```{r proportion unsolved graph}
 results |> 
   mutate(city = forcats::fct_reorder(city, estimate, .desc = TRUE)) |> 
   ggplot(aes(x = city, y = estimate)) +
@@ -203,28 +166,25 @@ results |>
         ymax = conf.high)
   ) +
   labs(
-    title = "Estimate of the proportion of unresolved homicides in each city",
+    title = "Estimate of the proportion of unsolved homicides in each city",
     x = "city",
-    y = "estimate of proportion of unresolved homicides"
+    y = "estimate of proportion of unsolved homicides"
   ) +
   theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1))
 
 
 ```
+Chicago has the highest proportion of unsolved homicides. Aside from Chicago, there is noticeable variability in the proportion of unsolved homicides across the cities.
 
 # Problem 2
-Start with a dataframe containing all file names; the list.files function will help
-Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe
 
-Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”, and do any other tidying that’s necessary
+## Import, tidy, and examine data from an RCT
+In this RCT, 10 participants were assigned to the experimental group and 10 participants were assigned to the control group. Each participant was followed for 8 weeks, and observations were collected weekly.
 
-Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
-
-
-```{r, message = FALSE}
+```{r RCT load clean, message = FALSE}
 participant_list <- list.files("data/rct_data", full.names = TRUE)
 
-participant_df <- participant_df <- tibble(file_name = participant_list) |> 
+participant_df <- tibble(file_name = participant_list) |> 
   mutate(all_obs = (map(file_name, \(f) read_csv(file = f)))) 
 
 participant_clean <- participant_df |> 
@@ -242,39 +202,34 @@ participant_clean <- participant_df |>
   mutate(arm = stringr::str_sub(id, 1, 3)) |> 
   select(id, arm, week, obs)
 
-
 ```
 
-
-Which plot to use?
-#Yes use facet
-```{r}
-participant_clean |> 
-  ggplot(aes(x = week, y = obs)) +
-  geom_point(aes(color = id)) +
-  geom_line(aes(color = id)) +
-  geom_smooth(aes(color = arm), se = FALSE) 
-  
+```{r RCT graph}
 participant_clean |> 
   ggplot(aes(x = week, y = obs)) +
   geom_point(aes(color = id)) +
   geom_line(aes(color = id)) +
   geom_smooth(se = FALSE) +
-  facet_grid(~arm)
+  facet_grid(~arm) +
+  labs(title = "Observational values for participants over 8 weeks")
   
-
 ```
 
+On average, participants in the experimental group presented with higher values for our outcome compared to participants in the control group over the course of 8 weeks. Over the 8 weeks, the average value of the outcome for participants in the control group was fairly steady while the average value of the outcome for participants in the experimental group increased.
+
+
 # Problem 3
- 
-One sample t test; two sided
-*Change to 5000 runs; what to do about computer pausing when running? won't give next output
-```{r}
+
+We will conduct a simulation to explore power in a one-sample two-sided t-test.
+
+First, we create a dataframe creating the parameters for each of our models. Then, we generate 5000 datasets from each of the models. Next, we apply a one-sample t-test to each of the datasets. 
+```{r simulation}
 t_test <- function(x) {
   t = t.test(x = x, mu = 0, conf.level = 0.95)
   
   broom::tidy(t)
 }
+
 
 simul_df <- 
   expand_grid(
@@ -284,16 +239,16 @@ simul_df <-
   ) |> 
   mutate(simul_dataset = map2(sample_size, true_mean_u, \(sa, tmu) rnorm(n = sa, mean = tmu, sd = 5)))
 
+
 simul_df <- simul_df |> 
   mutate(summary = map(simul_dataset, \(si) t_test(x = si))) |> 
   unnest(summary) |> 
   select(true_mean_u, estimate, p.value)
 
 ```
-Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ
- on the x axis. Describe the association between effect size and power.
 
-```{r}
+
+```{r power and effect}
 simul_df |> 
   select(true_mean_u, estimate, p.value) |> 
   mutate(null_rejected = case_when(
@@ -305,6 +260,7 @@ simul_df |>
   filter(null_rejected == "Yes") |> 
   ggplot(aes(x = true_mean_u, y = prop)) +
   geom_point() +
+  geom_line() +
   labs(
     title = "Plot of power against mu",
     x = "mu",
@@ -313,51 +269,12 @@ simul_df |>
 
 ```
 
-As effect size increases, power increases.
+In this graph, we see that as mu increases, the proportion of times the null hypothesis was rejected increases. This indicates that as effect size increases, power increases. When our effect size is large, we are able to better detect a false null hypothesis.
 
 
-Make a plot showing the average estimate of μ̂ 
- on the y axis and the true value of μ
- on the x axis. Make a second plot (or overlay on the first) the average estimate of μ̂ 
- only in samples for which the null was rejected on the y axis and the true value of μ
- on the x axis. Is the sample average of μ̂ 
- across tests for which the null is rejected approximately equal to the true value of μ
-? Why or why not?
+```{r mu graph}
 
-
-```{r}
-
-all <- simul_df |> 
-  select(true_mean_u, estimate) |> 
-  group_by(true_mean_u) |> 
-  summarize(avg_estimate_u = mean(estimate)) |> 
-  ggplot(aes(true_mean_u, avg_estimate_u)) +
-  geom_point() +
-  geom_smooth(se = FALSE) +
-  labs(
-    title = "Plot of avg u_hat against mu",
-    x = "mu",
-    y = "average mu_hat"
-  )
-
-filtered <- simul_df |> 
-  select(true_mean_u, estimate, p.value) |> 
-  filter(p.value <= 0.05) |> 
-  group_by(true_mean_u) |> 
-  summarize(avg_estimate_u = mean(estimate)) |> 
-  ggplot(aes(true_mean_u, avg_estimate_u)) +
-  geom_point() +
-  geom_smooth(se = FALSE) +
-  labs(
-    title = "Plot of avg u_hat against mu",
-    subtitle = "Only when null hypotesis is rejected",
-    x = "mu",
-    y = "average mu_hat"
-  )
-
-all + filtered
-
-e <- simul_df |> 
+rejected <- simul_df |> 
   select(true_mean_u, estimate, p.value) |> 
   filter(p.value <= 0.05) |> 
   group_by(true_mean_u) |> 
@@ -373,20 +290,17 @@ simul_df |>
   labs(
     title = "Plot of avg u_hat against mu",
     x = "mu",
-    y = "average mu_hat"
-  ) + geom_point(data = e) +
-  geom_line(data = e, color = "red")
+    y = "average mu_hat",
+    caption = "Black: All Samples, Purple: Only samples for which null was rejected"
+  ) + 
+  geom_point(data = rejected) +
+  geom_line(data = rejected, color = "purple") 
 
 ```
-# Use the overlaid graph
 
+When our hypothesized mu is in the range of 0 to 4, the average estimate of mu differs between all samples vs only samples for which the null was rejected. When mu exceeds 4, the average estimate of mu becomes similar.
 
-better fit at higher values. why? greater effect size so more power?
-power - rejecting the null when it is actually false
-but when we reject the null we say it follows a diff distribution so they shouldn't match?
-
-# So look at the rejected null we would expect the graphs not to overla right b/c we're rejecting the nully; which we mainly what we see (that's not the case for 4-6 not sure why)
-
+When we look at the data for only samples for which the null was rejected, the discordance between the hypothesized values of mu (x axis) and the average estimates of mu (y axis) aligns with our expectations. When we reject a null hypothesis, we are saying that we have evidence that the true value of mu is different from our hypothesized value for mu. 
 
    
 
